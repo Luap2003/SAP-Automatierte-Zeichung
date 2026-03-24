@@ -1,0 +1,119 @@
+{
+  "substrate_type": "plane",
+
+  "title_block": {
+    "document_nr": "000000-1061-510/01",
+    "doc_type": "FUM",
+    "part_doc": "001",
+    "version": "03",
+    "sheet": "1",
+    "sheets_total": "1",
+    "designation": "Kopieträger (75x65x6) mm³",
+    "project_classification": "P54263232",
+    "component_level": "T",
+    "component_counter": "O",
+    "component_char": "",
+    "construction_group": "K54",
+    "scale": "1:1",
+    "format": "A4",
+    "created_by": "ZJFREY",
+    "created_date": "24.04.2020",
+    "checked_by": "ZJFREY",
+    "checked_date": "31.07.2020",
+    "technical_by": "ZJJOG",
+    "technical_date": "31.07.2020",
+    "norm_by": "ZJFREY",
+    "norm_date": "31.07.2020",
+    "released_by": "ZJFREY",
+    "released_date": "31.07.2020",
+    "mass": "73.049 g",
+    "model_name": "000000-1061-510_01-001",
+    "model_version": "03",
+    "surface_treatment": "-",
+    "material_description": "Fa. Schott / N-BK7",
+    "gs_required": "nein",
+    "general_tolerance": "ISO 10110 - 11",
+    "size_standard": "ISO 14405",
+    "edge_standard": "ISO 13715",
+    "surface_standard": "ISO 10110 - 8",
+    "drawing_standard": "ISO 10110",
+    "rohs_note": "Werkstoffe, Schichten und Hilfsstoffe müssen\nRoHS konform sein gemäß Direktive 2015/863/EU.",
+    "cz_position": "CZ_9708",
+    "tolerances": {
+      "plus_large": "+0.50",
+      "minus_large": "-0.05",
+      "plus_small": "+0.05",
+      "minus_small": "-0.20"
+    }
+  },
+
+  "geometry": {
+    "length_mm": 75,
+    "length_tol_plus": 0.1,
+    "length_tol_minus": 0.1,
+    "width_mm": 65,
+    "width_tol_plus": 0.1,
+    "width_tol_minus": 0.1,
+    "thickness_mm": 6,
+    "thickness_tol_plus": 0.1,
+    "thickness_tol_minus": 0.1,
+    "ca_x_mm": 65,
+    "ca_y_mm": 61
+  },
+
+  "parallelism": {
+    "value_mm": 0.05,
+    "datum": "A"
+  },
+
+  "material": {
+    "name": "N-BK7",
+    "manufacturer": "Fa. Schott",
+    "ne": 1.51872,
+    "ve": 63.96,
+    "stress_birefringence": "0/-",
+    "bubbles_inclusions": "1/",
+    "homogeneity_striae": "2/"
+  },
+
+  "left_surface": {
+    "label": "linke Fläche",
+    "radius": "PL",
+    "radius_display": "R PL",
+    "r_kenn": "-",
+    "chamfer": {
+      "width_mm": 0.5,
+      "tolerance_mm": 0.2,
+      "angle_deg": 45,
+      "type": "Schutzfasen"
+    },
+    "figure_error": "3/-",
+    "centering": "4/-",
+    "surface_quality": "5/-",
+    "coating": "-",
+    "coating_spec": ""
+  },
+
+  "right_surface": {
+    "label": "rechte Fläche",
+    "radius": "PL",
+    "radius_display": "R PL",
+    "r_kenn": "-",
+    "chamfer": {
+      "width_mm": 1.5,
+      "tolerance_mm": 0.2,
+      "angle_deg": 30,
+      "type": "Funktionsfase"
+    },
+    "figure_error": "3/5 (2)",
+    "centering": "4/-",
+    "surface_quality": "5/ 10x0,063",
+    "coating": "-",
+    "coating_spec": ""
+  },
+
+  "surface_roughness": {
+    "rq_nm": 1.2,
+    "measurement_area": "P3"
+  }
+}
