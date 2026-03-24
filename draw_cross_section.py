@@ -5,14 +5,15 @@ from drawing_helpers import *
 
 def draw_cross_section(c, data: dict, cx: float, cy: float, scale: float):
     """
-    Draw the substrate cross-section (rectangular for plane substrates).
+    Draw the substrate front face view (length x width).
     Returns coordinate dict for dimensioning.
     """
     geo = data["geometry"]
     ls  = data["left_surface"]
     rs  = data["right_surface"]
 
-    w = geo["thickness_mm"] * scale
+    # Front face: length (horizontal) x width (vertical)
+    w = geo["length_mm"] * scale
     h = geo["width_mm"] * scale
 
     xl = cx - w / 2
@@ -20,24 +21,26 @@ def draw_cross_section(c, data: dict, cx: float, cy: float, scale: float):
     yb = cy - h / 2
     yt = cy + h / 2
 
-    # Chamfer geometry
+    # Chamfer geometry at corners
+    # Left surface chamfer: top-left and bottom-left corners
     lc_w = ls["chamfer"]["width_mm"] * scale
     lc_a = ls["chamfer"]["angle_deg"]
     lc_h = lc_w * math.tan(math.radians(lc_a))
+    # Right surface chamfer: top-right and bottom-right corners
     rc_w = rs["chamfer"]["width_mm"] * scale
     rc_a = rs["chamfer"]["angle_deg"]
     rc_h = rc_w * math.tan(math.radians(rc_a))
 
-    # Outline path with chamfers
+    # Outline path with chamfered corners (clockwise from bottom-left)
     pts = [
-        (xl + lc_w, yb),
-        (xr - rc_w, yb),
-        (xr, yb + rc_h),
-        (xr, yt - rc_h),
-        (xr - rc_w, yt),
-        (xl + lc_w, yt),
-        (xl, yt - lc_h),
-        (xl, yb + lc_h),
+        (xl, yb + lc_h),       # bottom-left corner, going up
+        (xl + lc_w, yb),       # bottom-left corner, going right
+        (xr - rc_w, yb),       # bottom-right corner start
+        (xr, yb + rc_h),       # bottom-right corner end
+        (xr, yt - rc_h),       # top-right corner start
+        (xr - rc_w, yt),       # top-right corner end
+        (xl + lc_w, yt),       # top-left corner start
+        (xl, yt - lc_h),       # top-left corner end
     ]
 
     c.setStrokeColor(C_BLACK)
@@ -49,7 +52,7 @@ def draw_cross_section(c, data: dict, cx: float, cy: float, scale: float):
     path.close()
     c.drawPath(path, stroke=1, fill=0)
 
-    # Hatching
+    # Cross-hatching (two directions for glass material)
     c.setStrokeColor(C_GREY)
     c.setLineWidth(LW_HAIR)
     c.saveState()
@@ -63,42 +66,54 @@ def draw_cross_section(c, data: dict, cx: float, cy: float, scale: float):
     spacing = HATCH_SPACING
     diag = math.sqrt(w**2 + h**2) * 1.5
     n_lines = int(diag / spacing) + 2
-    angle_rad = math.radians(HATCH_ANGLE)
-    cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
 
-    for i in range(-n_lines, n_lines):
-        offset = i * spacing
-        x1 = cx + offset * cos_a - diag * sin_a
-        y1 = cy + offset * sin_a + diag * cos_a
-        x2 = cx + offset * cos_a + diag * sin_a
-        y2 = cy + offset * sin_a - diag * cos_a
-        c.line(pt(x1), pt(y1), pt(x2), pt(y2))
+    for angle in [HATCH_ANGLE, -HATCH_ANGLE]:
+        angle_rad = math.radians(angle)
+        cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
+        for i in range(-n_lines, n_lines):
+            offset = i * spacing
+            x1 = cx + offset * cos_a - diag * sin_a
+            y1 = cy + offset * sin_a + diag * cos_a
+            x2 = cx + offset * cos_a + diag * sin_a
+            y2 = cy + offset * sin_a - diag * cos_a
+            c.line(pt(x1), pt(y1), pt(x2), pt(y2))
 
     c.restoreState()
     c.setStrokeColor(C_BLACK)
 
-    # Clear Aperture (dashed rectangle)
+    # Clear Aperture (dashed rectangle inside face)
+    ca_x = geo["ca_x_mm"] * scale
     ca_y = geo["ca_y_mm"] * scale
-    ca_t = cy + ca_y / 2
+    ca_l = cx - ca_x / 2
+    ca_r = cx + ca_x / 2
     ca_b = cy - ca_y / 2
+    ca_t = cy + ca_y / 2
+
     c.setStrokeColor(C_GREEN)
-    draw_dashed_line(c, xl, ca_t, xr, ca_t, lw=LW_THIN, dash=(3, 1.5))
-    draw_dashed_line(c, xl, ca_b, xr, ca_b, lw=LW_THIN, dash=(3, 1.5))
-    draw_dashed_line(c, xl - 0.3, ca_b, xl - 0.3, ca_t, lw=LW_HAIR, dash=(3, 1.5))
-    draw_dashed_line(c, xr + 0.3, ca_b, xr + 0.3, ca_t, lw=LW_HAIR, dash=(3, 1.5))
+    draw_dashed_line(c, ca_l, ca_b, ca_r, ca_b, lw=LW_THIN, dash=(3, 1.5))
+    draw_dashed_line(c, ca_l, ca_t, ca_r, ca_t, lw=LW_THIN, dash=(3, 1.5))
+    draw_dashed_line(c, ca_l, ca_b, ca_l, ca_t, lw=LW_THIN, dash=(3, 1.5))
+    draw_dashed_line(c, ca_r, ca_b, ca_r, ca_t, lw=LW_THIN, dash=(3, 1.5))
     c.setStrokeColor(C_BLACK)
 
-    draw_text(c, "Prüfbereich", xr + 3, ca_t - 1, size=1.8)
-    draw_text(c, "Prüfbereich", xr + 3, ca_b - 1, size=1.8)
-    for ay in [ca_t, ca_b]:
-        draw_line(c, xr + 1, ay, xr + 2.5, ay, lw=LW_HAIR)
+    # "Prüfbereich" label (rotated 90°, next to CA right line inside face)
+    c.saveState()
+    c.translate(pt(ca_r - 2), pt(cy))
+    c.rotate(90)
+    font_size = 1.8 * mm * 0.85
+    c.setFont("Helvetica", font_size)
+    c.setFillColor(C_BLACK)
+    tw = c.stringWidth("Prüfbereich", "Helvetica", font_size)
+    c.drawString(-tw / 2, 0, "Prüfbereich")
+    c.restoreState()
+    c.setFillColor(C_BLACK)
 
-    # Datum A
+    # Datum A on left edge
     draw_datum_symbol(c, xl, cy, "A", side="left")
 
     return {
         "xl": xl, "xr": xr, "yb": yb, "yt": yt,
-        "ca_t": ca_t, "ca_b": ca_b,
+        "ca_l": ca_l, "ca_r": ca_r, "ca_t": ca_t, "ca_b": ca_b,
         "cx": cx, "cy": cy, "scale": scale,
         "w": w, "h": h,
     }
@@ -135,66 +150,92 @@ def draw_datum_symbol(c, x, y, label, side="left"):
 
 
 def draw_dimensions(c, data: dict, coords: dict):
-    """Add ISO-style dimensions to the cross-section."""
+    """Add ISO-style dimensions to the front face view."""
     geo = data["geometry"]
     xl, xr = coords["xl"], coords["xr"]
     yb, yt = coords["yb"], coords["yt"]
-    cy = coords["cy"]
-    sc = coords["scale"]
+    ca_l, ca_r = coords["ca_l"], coords["ca_r"]
     ca_t, ca_b = coords["ca_t"], coords["ca_b"]
+    cx, cy = coords["cx"], coords["cy"]
+    sc = coords["scale"]
 
     c.setStrokeColor(C_RED)
     c.setFillColor(C_RED)
 
-    # Thickness (horizontal, below)
-    dim_y = yb - 10
-    draw_dim_linear_h(c, xl, xr, dim_y, f"{geo['thickness_mm']}",
-                      tol=f"±{geo['thickness_tol_plus']}")
+    # ── Bottom dimensions ──────────────────────────────────────────
+    # Row 1: CA width with "Prüfbereich" label and offset "5"
+    dim_y1 = yb - 7
+    draw_dim_linear_h(c, ca_l, ca_r, dim_y1, f"{geo['ca_x_mm']}",
+                      ext_from_y=yb)
 
-    # Width (vertical, right side)
-    dim_x1 = xr + 18
-    draw_dim_linear_v(c, yb, yt, dim_x1,
-                      f"{geo['width_mm']}",
+    # Offset dimension "5" (right gap between CA and face edge)
+    offset_x = (geo["length_mm"] - geo["ca_x_mm"]) / 2.0
+    if offset_x > 0:
+        draw_dim_linear_h(c, ca_r, xr, dim_y1, f"{int(offset_x)}",
+                          ext_from_y=yb)
+
+    # "Prüfbereich" label below the CA dimension
+    draw_text(c, "Prüfbereich", (ca_l + ca_r) / 2, dim_y1 - 3.5,
+              size=1.8, anchor="center", color=C_BLACK)
+
+    # Row 2: Total length (75 ±0.1)
+    dim_y2 = yb - 15
+    draw_dim_linear_h(c, xl, xr, dim_y2, f"{geo['length_mm']}",
+                      tol=f"±{geo['length_tol_plus']}",
+                      ext_from_y=yb)
+
+    # ── Right dimensions ───────────────────────────────────────────
+    # Column 1: offset "2" (bottom gap) + CA height (61)
+    dim_x1 = xr + 10
+    offset_y = (geo["width_mm"] - geo["ca_y_mm"]) / 2.0
+
+    # CA height dimension
+    draw_dim_linear_v(c, ca_b, ca_t, dim_x1, f"{geo['ca_y_mm']}",
+                      ext_from=xr)
+
+    # Column 2: Total width (65 ±0.1)
+    dim_x2 = xr + 22
+    draw_dim_linear_v(c, yb, yt, dim_x2, f"{geo['width_mm']}",
                       tol=f"±{geo['width_tol_plus']}",
                       ext_from=xr)
 
-    # Length (vertical, right side, second)
-    dim_x2 = xr + 30
-    draw_dim_linear_v(c, yb, yt, dim_x2,
-                      f"{geo['length_mm']}",
-                      tol=f"±{geo['length_tol_plus']}",
-                      ext_from=xr)
+    # Offset "2" between face bottom and CA bottom
+    if offset_y > 0:
+        # Small text label for offset
+        draw_text(c, f"{int(offset_y)}", dim_x1 - 1.5,
+                  (yb + ca_b) / 2 - 0.8, size=1.8, color=C_RED)
 
-    # Clear aperture y
-    dim_x_ca = xr + 8
-    draw_dim_linear_v(c, ca_b, ca_t, dim_x_ca,
-                      f"{geo['ca_y_mm']}",
-                      ext_from=xr)
+    # ── Thickness dimension (bottom-left, under face edge) ──────────
+    # Show "6 ±0.1" as a small horizontal dimension at the left
+    th_w = geo["thickness_mm"] * sc
+    draw_dim_linear_h(c, xl, xl + th_w, dim_y1,
+                      f"{geo['thickness_mm']}",
+                      tol=f"±{geo['thickness_tol_plus']}",
+                      ext_from_y=yb)
 
-    # Clear aperture x (horizontal, above)
-    dim_y_ca = yt + 6
-    ca_x_half = geo["ca_x_mm"] * sc / 2
-    draw_dim_linear_h(c, coords["cx"] - ca_x_half, coords["cx"] + ca_x_half,
-                      dim_y_ca, f"{geo['ca_x_mm']}")
-
-    # Chamfer labels
+    # ── Chamfer labels ─────────────────────────────────────────────
     ls = data["left_surface"]["chamfer"]
     rs = data["right_surface"]["chamfer"]
-    lc_text = f"{ls['width_mm']} ±{ls['tolerance_mm']} x {int(ls['angle_deg'])}°"
-    draw_text(c, f"Schutzfasen {lc_text}", xl - 5, yt + 10, size=1.8, color=C_BLACK)
+
+    # Left surface chamfer label (top-left)
+    lc_text = f"Schutzfasen {ls['width_mm']} ±{ls['tolerance_mm']} x {int(ls['angle_deg'])}°"
+    draw_text(c, lc_text, xl - 5, yt + 12, size=1.8, color=C_BLACK)
     lc_w_sc = ls["width_mm"] * sc
-    draw_line(c, xl + lc_w_sc, yt, xl + 2, yt + 9, lw=LW_HAIR)
-    c.setStrokeColor(C_RED)
-
-    rc_text = f"{rs['width_mm']} ±{rs['tolerance_mm']} x {int(rs['angle_deg'])}°"
-    draw_text(c, rc_text, xr + 3, yt + 10, size=1.8, color=C_BLACK)
     c.setStrokeColor(C_BLACK)
-    draw_line(c, xr - rs["width_mm"] * sc, yt, xr - 1, yt + 9, lw=LW_HAIR)
+    draw_line(c, xl + lc_w_sc, yt, xl + 3, yt + 11, lw=LW_HAIR)
     c.setStrokeColor(C_RED)
 
-    # Parallelism tolerance frame
+    # Right surface chamfer label (top-right)
+    rc_text = f"{rs['width_mm']} ±{rs['tolerance_mm']} x {int(rs['angle_deg'])}°"
+    draw_text(c, rc_text, xr - 8, yt + 12, size=1.8, color=C_BLACK)
+    c.setStrokeColor(C_BLACK)
+    draw_line(c, xr - rs["width_mm"] * sc, yt, xr - 3, yt + 11, lw=LW_HAIR)
+    c.setStrokeColor(C_RED)
+
+    # ── Parallelism tolerance frame (bottom-right of cross-section) ─
     par = data["parallelism"]
-    draw_tolerance_frame(c, par["value_mm"], par["datum"], xr + 3, yt + 14)
+    draw_tolerance_frame(c, par["value_mm"], par["datum"],
+                         ca_r + 5, dim_y2 + 1)
 
     c.setStrokeColor(C_BLACK)
     c.setFillColor(C_BLACK)

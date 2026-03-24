@@ -14,7 +14,7 @@ def draw_border(c):
 
     # Zone labels
     zones_y = ['D', 'C', 'B', 'A']
-    zones_x = ['1', '2', '3', '4', '5']
+    zones_x = ['1', '2', '3', '4', '5', '6']
     zh = (F_TOP - F_BOTTOM) / len(zones_y)
     zw = (F_RIGHT - F_LEFT) / len(zones_x)
 
