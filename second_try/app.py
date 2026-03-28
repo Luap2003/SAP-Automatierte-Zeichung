@@ -303,6 +303,32 @@ def get_default_path(path: str) -> Any:
     return get_path(DEFAULT_JSON, path)
 
 
+GLASS_DENSITY: Dict[str, float] = {
+    "N-BK7": 2.51, "N-BK10": 2.56, "N-K5": 2.59,
+    "N-F2": 3.61, "N-SF11": 4.74, "N-SF6": 5.18,
+    "N-BAK1": 3.19, "N-LAK22": 3.72, "N-LASF9": 4.44,
+    "N-PK51": 3.68,
+}
+
+
+def compute_mass_g(spec: Dict[str, Any]) -> float:
+    L = safe_get(spec, "geometry.length_mm", 0)
+    W = safe_get(spec, "geometry.width_mm", 0)
+    T = safe_get(spec, "geometry.thickness_mm", 0)
+    volume_cm3 = L * W * T / 1000.0
+    material = (get_path(spec, "material.name") or "").strip()
+    density = GLASS_DENSITY.get(material, 2.51)
+    return round(volume_cm3 * density, 2)
+
+
+_FORM_CSS = """
+<style>
+[data-testid="stNumberInputStepDown"],
+[data-testid="stNumberInputStepUp"] { display: none !important; }
+</style>
+"""
+
+
 def set_path(spec: Dict[str, Any], path: str, value: Any) -> None:
     parts = path.split(".")
     obj = spec
@@ -827,38 +853,159 @@ def render_field(path: str, label: str, field_type: str, step: Optional[float]):
         )
 
 
+def _lbl(text: str) -> None:
+    """Render a row label aligned with the input widget."""
+    st.markdown(
+        f"<p style='margin-top:28px;margin-bottom:0;font-size:14px'>{text}</p>",
+        unsafe_allow_html=True,
+    )
+
+
+def _num(path: str, label: str = "", step: float = 0.1) -> None:
+    widget_key = f"field__{path.replace('.', '__')}"
+    value = get_path(st.session_state["spec"], path)
+    try:
+        nv = float(value)
+    except (TypeError, ValueError):
+        fallback = get_default_path(path)
+        try:
+            nv = float(fallback)
+        except (TypeError, ValueError):
+            nv = 0.0
+        set_path(st.session_state["spec"], path, nv)
+        st.session_state["raw_json_text"] = _serialize_spec(st.session_state["spec"])
+    sync_widget_value(widget_key, nv)
+    vis = "visible" if label else "collapsed"
+    st.number_input(label, key=widget_key, step=step,
+                    label_visibility=vis,
+                    on_change=_on_number_change, args=(path, widget_key))
+
+
+def _txt(path: str) -> None:
+    widget_key = f"field__{path.replace('.', '__')}"
+    value = get_path(st.session_state["spec"], path)
+    nv = "" if value is None else str(value)
+    sync_widget_value(widget_key, nv)
+    st.text_input("", key=widget_key, label_visibility="collapsed",
+                  on_change=_on_text_change, args=(path, widget_key))
+
+
+def _row(label: str, path: str, field_type: str, step: Optional[float] = None) -> None:
+    c_l, c_i = st.columns([1.8, 2.2])
+    with c_l:
+        _lbl(label)
+    with c_i:
+        if field_type == "number":
+            _num(path, step=step or 0.1)
+        else:
+            _txt(path)
+
+
+def _row_tol(label: str, val_path: str, plus_path: str, minus_path: str,
+             val_step: float = 0.1, tol_step: float = 0.01) -> None:
+    """Row: label | value | +tol | -tol (separate + and - tolerances)."""
+    c_l, c_v, c_p, c_m = st.columns([1.8, 1.5, 1.0, 1.0])
+    with c_l:
+        _lbl(label)
+    with c_v:
+        _num(val_path, step=val_step)
+    with c_p:
+        _num(plus_path, label="+", step=tol_step)
+    with c_m:
+        _num(minus_path, label="−", step=tol_step)
+
+
+def _row_sym_tol(label: str, val_path: str, tol_path: str,
+                 val_step: float = 0.1, tol_step: float = 0.1) -> None:
+    """Row: label | value | ±tol (single symmetric tolerance)."""
+    c_l, c_v, c_t = st.columns([1.8, 1.5, 1.2])
+    with c_l:
+        _lbl(label)
+    with c_v:
+        _num(val_path, step=val_step)
+    with c_t:
+        _num(tol_path, label="±", step=tol_step)
+
+
+def _sec(title: str) -> None:
+    st.markdown(f"**{title}**")
+
+
 def render_form_tab():
     st.caption("Formfelder aktualisieren die Zeichnung direkt. JSON-Tab bleibt synchron.")
     if st.button("Highlight zurücksetzen", use_container_width=True):
         st.session_state["active_field_path"] = None
 
-    with st.expander("Geometrie", expanded=True):
-        for path, label, field_type, step in FORM_FIELDS[:11]:
-            render_field(path, label, field_type, step)
+    _sec("Geometrie")
+    _row_tol("Länge [mm]", "geometry.length_mm",
+             "geometry.length_tol_plus", "geometry.length_tol_minus",
+             val_step=0.1, tol_step=0.01)
+    _row_tol("Breite [mm]", "geometry.width_mm",
+             "geometry.width_tol_plus", "geometry.width_tol_minus",
+             val_step=0.1, tol_step=0.01)
+    _row_tol("Dicke [mm]", "geometry.thickness_mm",
+             "geometry.thickness_tol_plus", "geometry.thickness_tol_minus",
+             val_step=0.01, tol_step=0.001)
+    _row("Prüfbereich X [mm]", "geometry.ca_x_mm", "number", 0.1)
+    _row("Prüfbereich Y [mm]", "geometry.ca_y_mm", "number", 0.1)
 
-    with st.expander("Parallelität", expanded=True):
-        for path, label, field_type, step in FORM_FIELDS[11:13]:
-            render_field(path, label, field_type, step)
+    st.divider()
+    _sec("Parallelität")
+    c1, c2 = st.columns(2)
+    with c1:
+        _row("Wert [mm]", "parallelism.value_mm", "number", 0.001)
+    with c2:
+        _row("Bezug", "parallelism.datum", "text")
 
-    with st.expander("Material", expanded=False):
-        for path, label, field_type, step in FORM_FIELDS[13:17]:
-            render_field(path, label, field_type, step)
+    st.divider()
+    _sec("Material")
+    _row("Name", "material.name", "text")
+    _row("Hersteller", "material.manufacturer", "text")
+    _row("Brechzahl ne", "material.ne", "number", 0.00001)
+    _row("Abbe-Zahl ve", "material.ve", "number", 0.01)
+    mass_g = compute_mass_g(st.session_state["spec"])
+    set_path(st.session_state["spec"], "title_block.mass", f"{mass_g:.2f}")
+    c_ml, c_mv = st.columns([1.8, 2.2])
+    with c_ml:
+        _lbl("Masse (auto)")
+    with c_mv:
+        st.markdown(
+            f"<p style='margin-top:28px;font-size:14px'><b>{mass_g:.2f} g</b></p>",
+            unsafe_allow_html=True,
+        )
 
-    with st.expander("Linke Fläche / Fase", expanded=False):
-        for path, label, field_type, step in FORM_FIELDS[17:20]:
-            render_field(path, label, field_type, step)
+    st.divider()
+    _sec("Linke Fläche")
+    _row("Formfehler 3/", "left_surface.figure_error", "text")
+    _row("Zentrierung 4/", "left_surface.centering", "text")
+    _row("Oberflächengüte 5/", "left_surface.surface_quality", "text")
+    _row_sym_tol("Fase Breite [mm]", "left_surface.chamfer.width_mm",
+                 "left_surface.chamfer.tolerance_mm", val_step=0.1, tol_step=0.05)
+    _row("Fase Winkel [°]", "left_surface.chamfer.angle_deg", "number", 1.0)
+    _row("Coating", "left_surface.coating", "text")
 
-    with st.expander("Rechte Fläche / Fase", expanded=False):
-        for path, label, field_type, step in FORM_FIELDS[20:23]:
-            render_field(path, label, field_type, step)
+    st.divider()
+    _sec("Rechte Fläche")
+    _row("Formfehler 3/", "right_surface.figure_error", "text")
+    _row("Zentrierung 4/", "right_surface.centering", "text")
+    _row("Oberflächengüte 5/", "right_surface.surface_quality", "text")
+    _row_sym_tol("Fase Breite [mm]", "right_surface.chamfer.width_mm",
+                 "right_surface.chamfer.tolerance_mm", val_step=0.1, tol_step=0.05)
+    _row("Fase Winkel [°]", "right_surface.chamfer.angle_deg", "number", 1.0)
+    _row("Coating", "right_surface.coating", "text")
 
-    with st.expander("Oberfläche", expanded=False):
-        for path, label, field_type, step in FORM_FIELDS[23:24]:
-            render_field(path, label, field_type, step)
+    st.divider()
+    _sec("Oberfläche")
+    _row("Rauheit Rq [nm]", "surface_roughness.rq_nm", "number", 0.1)
 
-    with st.expander("Titelblock (PDF)", expanded=False):
-        for path, label, field_type, step in FORM_FIELDS[24:]:
-            render_field(path, label, field_type, step)
+    st.divider()
+    _sec("Titelblock")
+    _row("Dokumenten-Nr.", "title_block.document_nr", "text")
+    _row("Benennung", "title_block.designation", "text")
+    _row("Projektklassifizierung", "title_block.project_classification", "text")
+    _row("Maßstab", "title_block.scale", "text")
+    _row("Werkstoff", "title_block.material_description", "text")
+    _row("Oberflächenbehandlung", "title_block.surface_treatment", "text")
 
 
 def render_json_tab():
@@ -916,6 +1063,7 @@ def render_info_block(spec: Dict[str, Any], active_tags: Set[str]):
 def main():
     st.set_page_config(page_title="Optik CAD Skizzen Generator", layout="wide")
     st.title("Optik CAD Skizzen Generator")
+    st.markdown(_FORM_CSS, unsafe_allow_html=True)
     st.caption("Links Formular/JSON bearbeiten, rechts wird die Zeichnung live erzeugt.")
 
     init_state()
