@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN conda install -y -c conda-forge python=3.12 cadquery=2.4.0 && conda clean -afy
 
 # Install remaining Python deps via pip
-RUN pip install --no-cache-dir streamlit matplotlib plotly reportlab
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .

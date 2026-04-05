@@ -1,5 +1,4 @@
 streamlit>=1.35
 matplotlib>=3.8
 plotly>=5.20
-cadquery>=2.6
-reportlab
+pytest>=8.0

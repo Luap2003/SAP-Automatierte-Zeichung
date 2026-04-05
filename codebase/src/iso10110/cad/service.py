@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 import math
 import os
 import tempfile
-from typing import Any, Dict, Optional
 
 import plotly.graph_objects as go
 
-from spec_utils import safe_get, get_path
+from ..domain.model import SpecV2
 
 try:
     import cadquery as cq
-except Exception:
+except Exception:  # pragma: no cover - optional dependency
     cq = None
 
 
@@ -17,17 +18,17 @@ def has_cadquery() -> bool:
     return cq is not None
 
 
-def build_cadquery_model(spec: Dict[str, Any]):
+def build_cadquery_model(spec: SpecV2):
     if not has_cadquery():
         return None
 
-    L = max(0.1, safe_get(spec, "geometry.length_mm", 75))
-    W = max(0.1, safe_get(spec, "geometry.width_mm", 65))
-    T = max(0.1, safe_get(spec, "geometry.thickness_mm", 6))
-    lc = max(0.0, safe_get(spec, "left_surface.chamfer.width_mm", 0.0))
-    left_angle = max(1.0, min(89.0, safe_get(spec, "left_surface.chamfer.angle_deg", 45.0)))
-    rc = max(0.0, safe_get(spec, "right_surface.chamfer.width_mm", 0.0))
-    right_angle = max(1.0, min(89.0, safe_get(spec, "right_surface.chamfer.angle_deg", 30.0)))
+    L = max(0.1, float(spec.geometry.length_mm))
+    W = max(0.1, float(spec.geometry.width_mm))
+    T = max(0.1, float(spec.geometry.thickness_mm))
+    lc = max(0.0, float(spec.left_surface.chamfer.width_mm))
+    left_angle = max(1.0, min(89.0, float(spec.left_surface.chamfer.angle_deg)))
+    rc = max(0.0, float(spec.right_surface.chamfer.width_mm))
+    right_angle = max(1.0, min(89.0, float(spec.right_surface.chamfer.angle_deg)))
 
     wp = cq.Workplane("XY").box(L, W, T)
 
@@ -54,7 +55,9 @@ def cadquery_to_plotly_figure(model) -> go.Figure:
     z = [v.z for v in vertices]
 
     mesh = go.Mesh3d(
-        x=x, y=y, z=z,
+        x=x,
+        y=y,
+        z=z,
         i=[t[0] for t in triangles],
         j=[t[1] for t in triangles],
         k=[t[2] for t in triangles],
@@ -88,8 +91,8 @@ def cadquery_model_to_bytes(model, fmt: str) -> bytes:
             shape.exportStep(path)
         else:
             shape.exportStl(path)
-        with open(path, "rb") as f:
-            return f.read()
+        with open(path, "rb") as handle:
+            return handle.read()
     finally:
         try:
             os.remove(path)
