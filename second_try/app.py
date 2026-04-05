@@ -23,15 +23,15 @@ from draw_cross_section import draw_cross_section, draw_dimensions
 from draw_iso_table import draw_iso_table, draw_roughness_symbol, draw_standards_box
 
 from spec_utils import (
-    DEFAULT_JSON, INFO_ROWS, FIELD_TAG_MAP,
+    INFO_ROWS, FIELD_TAG_MAP,
     deep_copy_default, get_path, set_path,
     compute_mass_g, active_tags_from_paths, tags_active,
 )
 from preview import render
 from cad_model import has_cadquery, build_cadquery_model, cadquery_to_plotly_figure, cadquery_model_to_bytes
 from ui_helpers import (
-    FORM_CSS, serialize_spec, sync_widget_value,
-    _lbl, _num, _txt, _row, _row_tol, _row_sym_tol, _sec,
+    FORM_CSS, serialize_spec,
+    _row, _row_mirror_tol, _row_value_with_tol_slot, _row_chamfer, _row_dual_text, _sec,
 )
 
 
@@ -113,80 +113,111 @@ def init_state():
 
 def render_form_tab():
     st.caption("Formfelder aktualisieren die Zeichnung direkt. JSON-Tab bleibt synchron.")
-    if st.button("Highlight zurücksetzen", use_container_width=True):
+    if st.button("Highlight zurücksetzen", width="stretch"):
         st.session_state["active_field_path"] = None
 
-    _sec("Geometrie")
-    _row_tol("Länge [mm]", "geometry.length_mm",
-             "geometry.length_tol_plus", "geometry.length_tol_minus",
-             val_step=0.1, tol_step=0.01)
-    _row_tol("Breite [mm]", "geometry.width_mm",
-             "geometry.width_tol_plus", "geometry.width_tol_minus",
-             val_step=0.1, tol_step=0.01)
-    _row_tol("Dicke [mm]", "geometry.thickness_mm",
-             "geometry.thickness_tol_plus", "geometry.thickness_tol_minus",
-             val_step=0.01, tol_step=0.001)
-    _row("Prüfbereich X [mm]", "geometry.ca_x_mm", "number", 0.1)
-    _row("Prüfbereich Y [mm]", "geometry.ca_y_mm", "number", 0.1)
+    mass_g = compute_mass_g(st.session_state["spec"])
+    mass_str = f"{mass_g:.2f}"
+    json_updated = False
+
+    if get_path(st.session_state["spec"], "title_block.mass") != mass_str:
+        set_path(st.session_state["spec"], "title_block.mass", mass_str)
+        json_updated = True
+
+    left_radius = str(get_path(st.session_state["spec"], "left_surface.radius") or "").strip()
+    left_radius_display = f"R {left_radius}" if left_radius else ""
+    if get_path(st.session_state["spec"], "left_surface.radius_display") != left_radius_display:
+        set_path(st.session_state["spec"], "left_surface.radius_display", left_radius_display)
+        json_updated = True
+
+    right_radius = str(get_path(st.session_state["spec"], "right_surface.radius") or "").strip()
+    right_radius_display = f"R {right_radius}" if right_radius else ""
+    if get_path(st.session_state["spec"], "right_surface.radius_display") != right_radius_display:
+        set_path(st.session_state["spec"], "right_surface.radius_display", right_radius_display)
+        json_updated = True
+
+    if json_updated:
+        st.session_state["raw_json_text"] = serialize_spec(st.session_state["spec"])
+
+    _sec("Geometriedaten")
+    h_label, h_value, h_tol = st.columns([1.8, 1.35, 1.15])
+    with h_label:
+        st.markdown("&nbsp;", unsafe_allow_html=True)
+    with h_value:
+        st.markdown("**Wert**")
+    with h_tol:
+        st.markdown("**Toleranz**")
+
+    _row_mirror_tol(
+        "Länge / mm", "geometry.length_mm",
+        "geometry.length_tol_plus", "geometry.length_tol_minus",
+        val_step=0.1, tol_step=0.01,
+    )
+    _row_mirror_tol(
+        "Breite / mm", "geometry.width_mm",
+        "geometry.width_tol_plus", "geometry.width_tol_minus",
+        val_step=0.1, tol_step=0.01,
+    )
+    _row_mirror_tol(
+        "Substratdicke / mm", "geometry.thickness_mm",
+        "geometry.thickness_tol_plus", "geometry.thickness_tol_minus",
+        val_step=0.01, tol_step=0.001,
+    )
+    _row_value_with_tol_slot("CA_x / mm", "geometry.ca_x_mm", step=0.1)
+    _row_value_with_tol_slot("CA_y / mm", "geometry.ca_y_mm", step=0.1)
+    _row_value_with_tol_slot("Parallelität", "parallelism.value_mm", step=0.001)
 
     st.divider()
-    _sec("Parallelität")
-    c1, c2 = st.columns(2)
-    with c1:
-        _row("Wert [mm]", "parallelism.value_mm", "number", 0.001)
-    with c2:
-        _row("Bezug", "parallelism.datum", "text")
+    left_col, right_col = st.columns(2, gap="medium")
+    with left_col:
+        _sec("Linke Fläche")
+        _row("Radius", "left_surface.radius", "text")
+        _row("R_Kenn", "left_surface.r_kenn", "text")
+        _row_chamfer(
+            "Schutzfase",
+            "left_surface.chamfer.width_mm",
+            "left_surface.chamfer.tolerance_mm",
+            "left_surface.chamfer.angle_deg",
+            width_step=0.1, tol_step=0.05, angle_step=1.0,
+        )
+        _row("Passe 3/", "left_surface.figure_error", "text")
+        _row("Zentrierung 4/", "left_surface.centering", "text")
+        _row("Sauberkeit 5/", "left_surface.surface_quality", "text")
+        _row("Coating", "left_surface.coating", "text")
+
+    with right_col:
+        _sec("Rechte Fläche")
+        _row("Radius", "right_surface.radius", "text")
+        _row("R_Kenn", "right_surface.r_kenn", "text")
+        _row_chamfer(
+            "Funktionsfase",
+            "right_surface.chamfer.width_mm",
+            "right_surface.chamfer.tolerance_mm",
+            "right_surface.chamfer.angle_deg",
+            width_step=0.1, tol_step=0.05, angle_step=1.0,
+        )
+        _row("Passe 3/", "right_surface.figure_error", "text")
+        _row("Zentrierung 4/", "right_surface.centering", "text")
+        _row("Sauberkeit 5/", "right_surface.surface_quality", "text")
+        _row("Coating", "right_surface.coating", "text")
 
     st.divider()
     _sec("Material")
-    _row("Name", "material.name", "text")
-    _row("Hersteller", "material.manufacturer", "text")
-    _row("Brechzahl ne", "material.ne", "number", 0.00001)
-    _row("Abbe-Zahl ve", "material.ve", "number", 0.01)
-
-    mass_g = compute_mass_g(st.session_state["spec"])
-    set_path(st.session_state["spec"], "title_block.mass", f"{mass_g:.2f}")
-    c_ml, c_mv = st.columns([1.8, 2.2])
-    with c_ml:
-        _lbl("Masse (auto)")
-    with c_mv:
-        st.markdown(
-            f"<p style='margin-top:28px;font-size:14px'><b>{mass_g:.2f} g</b></p>",
-            unsafe_allow_html=True,
-        )
+    _row_dual_text(
+        "Name / Hersteller",
+        "material.name",
+        "material.manufacturer",
+        left_label="Material",
+        right_label="Hersteller",
+    )
+    _row("0/", "material.stress_birefringence", "text")
+    _row("1/", "material.bubbles_inclusions", "text")
+    _row("2/", "material.homogeneity_striae", "text")
+    st.caption(f"Masse (automatisch): {mass_g:.2f} g")
 
     st.divider()
-    _sec("Linke Fläche")
-    _row("Formfehler 3/", "left_surface.figure_error", "text")
-    _row("Zentrierung 4/", "left_surface.centering", "text")
-    _row("Oberflächengüte 5/", "left_surface.surface_quality", "text")
-    _row_sym_tol("Fase Breite [mm]", "left_surface.chamfer.width_mm",
-                 "left_surface.chamfer.tolerance_mm", val_step=0.1, tol_step=0.05)
-    _row("Fase Winkel [°]", "left_surface.chamfer.angle_deg", "number", 1.0)
-    _row("Coating", "left_surface.coating", "text")
-
-    st.divider()
-    _sec("Rechte Fläche")
-    _row("Formfehler 3/", "right_surface.figure_error", "text")
-    _row("Zentrierung 4/", "right_surface.centering", "text")
-    _row("Oberflächengüte 5/", "right_surface.surface_quality", "text")
-    _row_sym_tol("Fase Breite [mm]", "right_surface.chamfer.width_mm",
-                 "right_surface.chamfer.tolerance_mm", val_step=0.1, tol_step=0.05)
-    _row("Fase Winkel [°]", "right_surface.chamfer.angle_deg", "number", 1.0)
-    _row("Coating", "right_surface.coating", "text")
-
-    st.divider()
-    _sec("Oberfläche")
-    _row("Rauheit Rq [nm]", "surface_roughness.rq_nm", "number", 0.1)
-
-    st.divider()
-    _sec("Titelblock")
-    _row("Dokumenten-Nr.", "title_block.document_nr", "text")
-    _row("Benennung", "title_block.designation", "text")
-    _row("Projektklassifizierung", "title_block.project_classification", "text")
-    _row("Maßstab", "title_block.scale", "text")
-    _row("Werkstoff", "title_block.material_description", "text")
-    _row("Oberflächenbehandlung", "title_block.surface_treatment", "text")
+    _sec("Grunddaten SAP")
+    _row("Materialbezeichnung (DE + EN)", "title_block.material_description", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +227,7 @@ def render_form_tab():
 def render_json_tab():
     st.caption("Roh-JSON bearbeiten und nur bei gültigem JSON übernehmen.")
     st.text_area("JSON", key="raw_json_text", height=740)
-    if st.button("JSON übernehmen", type="primary", use_container_width=True):
+    if st.button("JSON übernehmen", type="primary", width="stretch"):
         try:
             parsed = json.loads(st.session_state["raw_json_text"])
             if not isinstance(parsed, dict):
